@@ -11,7 +11,7 @@ class ElasticsearchController {
   ElasticsearchController(this.baseUrl);
 
   Future<String> uploadAndIndex(File pdfFile, String title) async {
-    final url = 'http://192.168.52.1:8000/index';
+    final url = 'https://korek.website/index';
 
     var request = http.MultipartRequest('POST', Uri.parse(url));
     request.fields['title'] = title;

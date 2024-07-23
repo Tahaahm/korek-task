@@ -5,7 +5,7 @@ import 'package:korek_task/screens/test/person.dart';
 //192.168.43.197
 class ApiClient {
   static const String baseUrl =
-      'http://192.168.43.197:8000'; // Replace with your Laravel API URL
+      'https://korek.website'; // Replace with your Laravel API URL
 
   static Future<List<Person>> fetchPeople() async {
     var response = await http.get(Uri.parse('$baseUrl/people'));

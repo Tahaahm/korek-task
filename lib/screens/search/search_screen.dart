@@ -1,20 +1,10 @@
-// ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, sized_box_for_whitespace, must_be_immutable, unrelated_type_equality_checks, avoid_print, prefer_const_constructors_in_immutables, dead_code, unused_local_variable, prefer_interpolation_to_compose_strings, unnecessary_null_comparison, unused_import, deprecated_member_use, use_build_context_synchronously, prefer_const_declarations, unnecessary_brace_in_string_interps, unused_field, unused_element
-
 import 'dart:convert';
-import 'dart:io';
-
-import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
-import 'package:korek_task/config/colors.dart';
-import 'package:http/http.dart' as http;
 import 'package:korek_task/screens/view/view_pdf_screen.dart';
-import 'package:html_unescape/html_unescape.dart';
-import 'package:flutter_html/flutter_html.dart';
-import 'package:open_file/open_file.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:lazy_load_scrollview/lazy_load_scrollview.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:lottie/lottie.dart';
 
 class SearchScreen extends StatefulWidget {
   SearchScreen({super.key});
@@ -27,29 +17,30 @@ class _SearchScreenState extends State<SearchScreen> {
   TextEditingController searchController = TextEditingController();
   List<dynamic> searchResults = [];
   bool isLoading = false;
+  int cardsToShow = 3;
+  bool _searchPerformed = false;
 
   Future<void> _performSearch(String query) async {
-    var username = 'taha';
-    var password = 'taha123';
-    var basicAuth = 'Basic ' + base64Encode(utf8.encode('$username:$password'));
     String apiUrl =
-        'http://192.168.43.197:8000/search?query=$query'; // Replace with your API endpoint
+        'https://korek.website/search?query=${Uri.encodeComponent(query)}';
 
     try {
       setState(() {
         isLoading = true;
+        searchResults.clear(); // Clear previous search results
+        _searchPerformed = true; // Mark that a search has been performed
       });
-      if (query != null) {
-        var response = await http.get(
-          Uri.parse(apiUrl),
-        );
+
+      if (query.isNotEmpty) {
+        var response = await http.get(Uri.parse(apiUrl));
 
         if (response.statusCode == 200) {
           setState(() {
-            searchResults = json.decode(response.body)[
-                'results']; // Replace with the actual key in the response JSON
-            print(searchResults);
+            searchResults = json.decode(response.body)['results'];
           });
+
+          // Print search results for debugging
+          print(searchResults);
         } else {
           print('Error searching PDF: ${response.statusCode}');
         }
@@ -57,11 +48,10 @@ class _SearchScreenState extends State<SearchScreen> {
           isLoading = false;
         });
       } else {
-        // Handle the case where query is null
+        setState(() {
+          isLoading = false;
+        });
       }
-      setState(() {
-        isLoading = false;
-      });
     } catch (error) {
       print('Error: $error');
       setState(() {
@@ -70,34 +60,33 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  Widget buildWebView(String text) {
+  Widget buildWebView(String htmlContent) {
     final webViewHtml = '''
     <!DOCTYPE html>
     <html>
     <head>
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; }
+        em { color: red; font-weight: bold; }
+      </style>
     </head>
     <body>
-      $text
+      $htmlContent
     </body>
     </html>
   ''';
 
-    // Generate a random number or string
-    // final randomQuery = DateTime.now().millisecondsSinceEpoch.toString();
-
     return Container(
-      decoration: BoxDecoration(color: Colors.white10),
+      decoration: BoxDecoration(color: Colors.white),
       width: double.infinity,
       height: 150,
       child: WebView(
         backgroundColor: Colors.transparent,
-        initialUrl: 'data:text/html;charset=utf-8,' +
-            Uri.encodeComponent(
-                webViewHtml), // Append the random query parameter
-        javascriptMode: JavascriptMode.disabled,
+        initialUrl:
+            'data:text/html;charset=utf-8,' + Uri.encodeComponent(webViewHtml),
+        javascriptMode: JavascriptMode.unrestricted,
         onWebViewCreated: (controller) {
-          controller.clearCache();
           controller.loadUrl(
             Uri.dataFromString(
               webViewHtml,
@@ -110,32 +99,22 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  bool _hasPermission = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkPermissionStatus();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColor.greyColor.withOpacity(0.2),
+      backgroundColor: Colors.white,
       body: Padding(
         padding: const EdgeInsets.only(left: 15, right: 15),
         child: Column(
           children: [
             Container(
               height: 55,
-              margin: EdgeInsets.symmetric(
-                horizontal: 8,
-              ).copyWith(top: 30),
+              margin: EdgeInsets.symmetric(horizontal: 8).copyWith(top: 30),
               decoration: BoxDecoration(
-                color: AppColor.backgroudColor,
+                color: Colors.grey[200],
                 boxShadow: [
                   BoxShadow(
-                    color: AppColor.greyColor.withOpacity(0.3),
+                    color: Colors.grey.withOpacity(0.3),
                     blurRadius: 4,
                     spreadRadius: 1,
                   ),
@@ -144,169 +123,218 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 50,
-                    child: Icon(Icons.search),
-                  ),
                   Expanded(
-                    child: TextFormField(
-                      controller: searchController,
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        hintText: "Search Your File",
-                        hintStyle: TextStyle(
-                          fontWeight: FontWeight.w400,
-                          fontSize: 15,
-                        ),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.3),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          ),
+                        ],
                       ),
-                      onEditingComplete: () {
-                        setState(() {});
-                      },
-                      onChanged: (value) {},
-                      onFieldSubmitted: (value) {
-                        setState(() {
-                          _performSearch(value);
-                        });
-                      },
-                      onTap: () {},
+                      child: TextFormField(
+                        controller: searchController,
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.search, color: Colors.grey),
+                          suffixIcon: searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(Icons.clear, color: Colors.grey),
+                                  onPressed: () {
+                                    searchController.clear();
+                                    setState(() {});
+                                  },
+                                )
+                              : null,
+                          contentPadding: EdgeInsets.symmetric(vertical: 15.0),
+                          border: InputBorder.none,
+                          hintText: "Search Your File",
+                          hintStyle: TextStyle(
+                            fontWeight: FontWeight.w400,
+                            fontSize: 15,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        onEditingComplete: () {
+                          setState(() {});
+                        },
+                        onChanged: (value) {
+                          setState(() {});
+                        },
+                        onFieldSubmitted: (value) {
+                          setState(() {
+                            _performSearch(value);
+                          });
+                        },
+                      ),
                     ),
-                  ),
+                  )
                 ],
               ),
             ),
             SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
+            GestureDetector(
+              onTap: () {
                 setState(() {
                   _performSearch(searchController.text);
                 });
               },
-              child: isLoading ? CircularProgressIndicator() : Text('Search'),
-            ),
-            SizedBox(height: 20),
-            Expanded(
-              child: ListView.builder(
-                itemCount: searchResults.length,
-                itemBuilder: (context, index) {
-                  final title = searchResults[index]['title'];
-                  final pdfContent =
-                      searchResults[index]['highlight']['pdf_content'].join("");
-                  final content = searchResults[index]['content'];
-                  var highlightedTextWidget = buildWebView(pdfContent);
-
-                  return InkWell(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PdfHtmlViewScreen(
-                            htmlContent: content,
-                            searchContent: searchController.text,
-                          ), // Pass the HTML content
+              child: Container(
+                alignment: Alignment.center,
+                width: double.maxFinite,
+                height: 50,
+                margin: EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.black,
+                ),
+                child: isLoading
+                    ? CircularProgressIndicator(color: Colors.white)
+                    : Text(
+                        'Search',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
                         ),
-                      );
-                      print("object");
-                    },
-                    child: Card(
-                      child: ListTile(
-                        title: Row(
-                          children: [
-                            Text(
-                              searchResults[index]['title'],
+                      ),
+              ),
+            ),
+            SizedBox(height: 10),
+            Expanded(
+              child: _searchPerformed
+                  ? (searchResults.isEmpty && !isLoading
+                      ? SingleChildScrollView(
+                          physics: NeverScrollableScrollPhysics(),
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Lottie.asset(
+                                  'assets/animation/search_empty.json',
+                                  width: 250,
+                                  height: 250,
+                                  repeat: false,
+                                ),
+                                SizedBox(height: 5),
+                                Text(
+                                  'Result is empty. Please try another search.',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ],
                             ),
-                            Expanded(child: Container()),
-                            IconButton(
-                              onPressed: () async {
-                                String pdfPath =
-                                    searchResults[index]['file_path'];
-                                String fullPdfUrl =
-                                    'http://192.168.43.197:8000/' + pdfPath;
-                                print("Full Url:" + fullPdfUrl);
-                                print("Full Url:" + fullPdfUrl);
-                                await downloadPdf(fullPdfUrl);
-                                _openDownloadedPdf();
-                              },
-                              icon: Icon(Icons.download),
-                            ),
-                            IconButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => PdfHtmlViewScreen(
-                                      htmlContent: content,
-                                      searchContent: searchController.text,
-                                    ), // Pass the HTML content
+                          ),
+                        )
+                      : LazyLoadScrollView(
+                          onEndOfPage: () {
+                            setState(() {
+                              cardsToShow +=
+                                  3; // Load 3 more cards when reaching the end
+                            });
+                          },
+                          scrollOffset: 100,
+                          child: ListView.builder(
+                            itemCount: searchResults.length > cardsToShow
+                                ? cardsToShow
+                                : searchResults.length,
+                            itemBuilder: (context, index) {
+                              final title = searchResults[index]['title'];
+                              final highlight =
+                                  searchResults[index]['highlight'];
+                              final pdfContent = highlight != null &&
+                                      highlight is List &&
+                                      highlight.isNotEmpty
+                                  ? highlight.join(" ")
+                                  : '';
+                              final content = searchResults[index]['content'];
+                              var highlightedTextWidget =
+                                  buildWebView(pdfContent);
+
+                              return Column(
+                                children: [
+                                  InkWell(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              PdfHtmlViewScreen(
+                                            htmlContent: content,
+                                            searchContent:
+                                                searchController.text,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      margin: EdgeInsets.only(
+                                          bottom: 15, left: 10, right: 10),
+                                      padding: EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.grey.withOpacity(0.1),
+                                            blurRadius: 10,
+                                            spreadRadius: 1,
+                                            offset: Offset(2, 2),
+                                          ),
+                                          BoxShadow(
+                                            color: Colors.grey.withOpacity(0.1),
+                                            blurRadius: 10,
+                                            spreadRadius: 1,
+                                            offset: Offset(-2, -2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ListTile(
+                                        title: Row(
+                                          children: [
+                                            Text(title),
+                                            Expanded(child: Container()),
+                                            IconButton(
+                                              onPressed: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        PdfHtmlViewScreen(
+                                                      htmlContent: content,
+                                                      searchContent:
+                                                          searchController.text,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              icon: Icon(Icons.view_agenda),
+                                            ),
+                                          ],
+                                        ),
+                                        subtitle: highlightedTextWidget,
+                                      ),
+                                    ),
                                   ),
-                                );
-                              },
-                              icon: Icon(Icons.view_agenda),
-                            ),
-                          ],
-                        ), // Adjust this to match your response structure
-                        subtitle:
-                            highlightedTextWidget, // Adjust this to match your response structure
+                                ],
+                              );
+                            },
+                          ),
+                        ))
+                  : Center(
+                      child: Text(
+                        'Please perform a search.',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ),
-                  );
-                },
-              ),
-            )
+            ),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _openDownloadedPdf() async {
-    final directory = await getExternalStorageDirectory();
-    final filePath = '${directory?.path}/downloaded_file.pdf';
-
-    final result = await OpenFile.open(filePath);
-    if (result.type != ResultType.done) {
-      print("Error opening file");
-    }
-  }
-
-  Future<void> _checkPermissionStatus() async {
-    PermissionStatus status = await Permission.storage.status;
-    setState(() {
-      _hasPermission = status.isGranted;
-      print(_hasPermission);
-    });
-  }
-
-  Future<void> _requestPermission() async {
-    PermissionStatus status = await Permission.storage.request();
-    if (status.isGranted) {
-      setState(() {
-        _hasPermission = true;
-      });
-    }
-  }
-
-  Future<void> downloadPdf(String url) async {
-    try {
-      if (_hasPermission) {
-        final directory = await getExternalStorageDirectory();
-        final filePath = '${directory?.path}/downloaded_file.pdf';
-
-        Dio dio = Dio();
-        await dio.download(url, filePath);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF downloaded successfully')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Permission not granted')),
-        );
-      }
-    } catch (e) {
-      print(e);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to download PDF')),
-      );
-    }
   }
 }
